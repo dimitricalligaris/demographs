@@ -296,3 +296,8 @@ button, .btn {
 #no-data-text {
     margin: 15px;
 }
+
+#note-data-not-saved {
+    font-style: italic;
+    margin-top: 4%;
+}

@@ -28,6 +28,7 @@ server = app.server
 app.layout = html.Div([
                 dcc.Store(id='alert-to-show'),
                 dcc.Store(id="client-options", data={'first-visit':True}, storage_type='local'),
+                dcc.Download(id="download-data"),
                 html.Div(
                     id='header',
                     children = [
@@ -275,6 +276,19 @@ def toggle_welcome_msg(n1, client_options):
     return False, patched_options
 
 
+
+# Scaricamento file di prova
+
+@app.callback(
+    Output("download-data", "data"),
+    Input("text-download-test-data", "n_clicks"),
+    prevent_initial_call=True,
+)
+def func(n_clicks):
+    if n_clicks > 0:
+        return dcc.send_file(
+            "data/test_data.csv"
+        )
 
 
 

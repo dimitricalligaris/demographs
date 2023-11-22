@@ -11,7 +11,8 @@ reset_button = dbc.Button("Rimuovi tutti i file caricati", id='btn_rimuovi_file_
 welcome_text = html.Div(id="welcome-text", style={'display': 'block'}, children=[
                     html.P(["Hai dei report demografici di crowdsourcing da analizzare? Sei nel posto giusto!"]),
                     html.P(["Carica su Demographs i report demografici esportati da Prolific ed Amazon Mechanical Turk, e lui li analizzerà per te creando statistiche e visualizzazioni!"]),
-                    html.P(["Nota: la piattaforma non tiene traccia dei file salvati, né dei dati in essi contenuti."]),
+                    html.P(["Se non hai un report demografico a portata di mano, uso quello di prova: ", html.A("test-data.csv", id="text-download-test-data", className="download_text", n_clicks=0)]),
+                    html.P(["Nota: la piattaforma non tiene traccia dei file salvati, né dei dati in essi contenuti."], id="note-data-not-saved"),
                 ])
 
 welcome_msg = html.Div(
