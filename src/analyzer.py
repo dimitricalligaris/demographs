@@ -257,7 +257,38 @@ class Analyzer():
         return len(data.dropna(subset=[col.value for col in columns]))
 
 
+    def serialize(self):
+        data = self.data.to_json(orient='split') if self.data is not None else None
+        return {
+            'data': data,
+            'visualizations': self.visualizations,
+            'generic_metadata': self.generic_metadata
+        }
+
+    @staticmethod
+    def deserialize(serialized_analyzer):
+        analyzer = Analyzer()
+        analyzer.data = pd.read_json(serialized_analyzer['data'], orient='split') if serialized_analyzer['data'] is not None else None
+        analyzer.visualizations = serialized_analyzer['visualizations']
+        analyzer.generic_metadata = serialized_analyzer['generic_metadata']
+        return analyzer
+
+
+
 @staticmethod
 def field_exists(df,field):
     "restituisce True se il campo è presente tra gli attributi del dataframe"
     return field.value in df.columns and df[field.value].notna().any()
+
+
+
+from marshmallow import Schema, fields
+
+class MyCustomClass:
+    def __init__(self, attribute1, attribute2):
+        self.attribute1 = attribute1
+        self.attribute2 = attribute2
+
+class MyCustomClassSchema(Schema):
+    attribute1 = fields.Str()
+    attribute2 = fields.Dict

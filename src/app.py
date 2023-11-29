@@ -2,7 +2,8 @@ import json
 import time
 import dash
 from dash.dependencies import Input, Output, State
-from dash import dcc, html, ALL, Patch
+from dash import dcc, html, ALL, Patch, no_update
+from dash.exceptions import PreventUpdate
 import dash_bootstrap_components as dbc
 
 from upload import *
@@ -27,6 +28,9 @@ server = app.server
 
 app.layout = html.Div([
                 dcc.Store(id='alert-to-show'),
+                dcc.Store(id='client-data', data={'uploader':'Uploader()', 'analyzer':Analyzer().serialize()}),
+                dcc.Store(id='client-data-tmp-1', data={'uploader':'Uploader()', 'analyzer':Analyzer().serialize()}),
+                dcc.Store(id='client-data-tmp-2', data={'uploader':'Uploader()', 'analyzer':Analyzer().serialize()}),
                 dcc.Store(id="client-options", data={'first-visit':True}, storage_type='local'),
                 dcc.Download(id="download-data"),
                 html.Div(
@@ -46,7 +50,7 @@ app.layout = html.Div([
 
 
 uploader = Uploader()
-analyzer = Analyzer()
+#analyzer = Analyzer()
 
 
 
@@ -55,20 +59,25 @@ analyzer = Analyzer()
 # Analisi dati: cambio url
 
 @app.callback(
-    Output('graphs_container', 'children'),
-    [Input('url', 'pathname')]
+    [Output('graphs_container', 'children'), Output('client-data-tmp-1','data')],
+    [Input('url', 'pathname')], State('client-data','data')
 )
-def display_page(pathname):
+def display_page(pathname, client_data):
+    analyzer = Analyzer.deserialize(client_data['analyzer'])
     if pathname == '/analytics':
-        analyzer.load_data(uploader.get_merged_data(), uploader.get_generic_metadata())
-        analyzer.create_all_graphs()
-        graphs = analyzer.get_visualizations()
-        metadata = analyzer.get_formatted_metadata()
-        summary = analyzer.generate_data_summary()
-        return Visualizer.create_complex_vis(graphs,metadata,summary)
+        if analyzer is not None:
+            analyzer.load_data(uploader.get_merged_data(), uploader.get_generic_metadata())
+            analyzer.create_all_graphs()
+            graphs = analyzer.get_visualizations()
+            metadata = analyzer.get_formatted_metadata()
+            summary = analyzer.generate_data_summary()
+            client_data['analyzer'] = analyzer.serialize()
+            return Visualizer.create_complex_vis(graphs,metadata,summary),client_data
     elif pathname == '/':
-        analyzer.clear()
-
+        if analyzer is not None:
+            analyzer.clear()
+            client_data['analyzer'] = analyzer.serialize()
+    return no_update, client_data
         
 
 
@@ -77,11 +86,14 @@ def display_page(pathname):
 @app.callback(Output('output-data-upload', 'children'),
               Output('alert-to-show', 'data'),
               Output('upload-data', 'contents'),
+              Output('client-data-tmp-2','data'),
               Input('upload-data', 'contents'), State('upload-data', 'filename'), Input('btn_rimuovi_file_caricati', 'n_clicks'),
-              Input({"type": "btn-remove-file", "index": ALL}, 'n_clicks'), State({"type": "card-filename-title", "index": ALL},'children'),
+              Input({"type": "btn-remove-file", "index": ALL}, 'n_clicks'), State({"type": "card-filename-title", "index": ALL},'children'), State('client-data','data'),
               prevent_initial_call=False)
-def update_output(list_of_contents, list_of_names, n_clicks_btn_rimuovi_file_caricati, n_clicks_remove_btn, filenames):
+def update_output(list_of_contents, list_of_names, n_clicks_btn_rimuovi_file_caricati, n_clicks_remove_btn, filenames, client_data):
     
+    analyzer = Analyzer.deserialize(client_data['analyzer'])
+
     alert_msg = []
     UPLOAD_DATA_CONTENTS = None                # x reset del contenuto di dcc.Upload
     
@@ -92,7 +104,7 @@ def update_output(list_of_contents, list_of_names, n_clicks_btn_rimuovi_file_car
         patched_list.clear()
         alert_msg = create_info_msg("Tutti i file sono stati rimossi.")
         alert_msg = json.dumps(alert_msg)
-        return patched_list, alert_msg, UPLOAD_DATA_CONTENTS
+        return patched_list, alert_msg, UPLOAD_DATA_CONTENTS, client_data
     elif is_triggered('upload-data') and list_of_contents is not None:
         output_data_upload = None
         saved_files_filenames,not_saved_files_info = save_uploaded_data(list_of_contents, list_of_names)
@@ -104,7 +116,7 @@ def update_output(list_of_contents, list_of_names, n_clicks_btn_rimuovi_file_car
         if not_saved_files_info:
             alert_msg = alert_msg+(create_upload_error_msg(not_saved_files_info))
         alert_msg = json.dumps(alert_msg)
-        return output_data_upload, alert_msg, UPLOAD_DATA_CONTENTS       # aggiunge solo i dati nuovi
+        return output_data_upload, alert_msg, UPLOAD_DATA_CONTENTS, client_data       # aggiunge solo i dati nuovi
     elif is_triggered('btn-remove-file'):
         patched_list = Patch()
         values_to_remove = []
@@ -116,15 +128,38 @@ def update_output(list_of_contents, list_of_names, n_clicks_btn_rimuovi_file_car
                 alert_msg = json.dumps(msg)
         for v in values_to_remove:
             del patched_list[v]
-        return patched_list, alert_msg, UPLOAD_DATA_CONTENTS
+        return patched_list, alert_msg, UPLOAD_DATA_CONTENTS, client_data
     else:           # per aggiornamento/raggiungimento pagina
         if uploader.has_data():
-            return upload_ui.generate_output(uploader.get_all_data(),[]), alert_msg, UPLOAD_DATA_CONTENTS # rigenera tutti i dati
-    return None, alert_msg, UPLOAD_DATA_CONTENTS
+            return upload_ui.generate_output(uploader.get_all_data(),[]), alert_msg, UPLOAD_DATA_CONTENTS, client_data # rigenera tutti i dati
+    return None, alert_msg, UPLOAD_DATA_CONTENTS, client_data
 
 @staticmethod
 def is_triggered(id):
     return id in dash.callback_context.triggered[0]['prop_id'].split('.')[0]
+
+
+
+@app.callback(
+    Output('client-data', 'data'),
+    [Input('client-data-tmp-1', 'data'),
+     Input('client-data-tmp-2', 'data')],
+    [State('client-data', 'data')], prevent_initial_call=True
+)
+def update_store(client_data_tmp_1, client_data_tmp_2, client_data):
+    triggered_id = dash.callback_context.triggered[0]['prop_id'].split('.')[0]
+
+    if triggered_id == 'client-data-tmp-1' and client_data_tmp_1:
+        client_data['uploader'],client_data['analyzer'] = client_data_tmp_1['uploader'],client_data_tmp_1['analyzer']
+    elif triggered_id == 'client-data-tmp-2' and client_data_tmp_2:
+        client_data['uploader'],client_data['analyzer'] = client_data_tmp_2['uploader'],client_data_tmp_2['analyzer']
+    else:
+        raise PreventUpdate
+
+    return client_data
+
+
+
 
 
 
@@ -293,5 +328,5 @@ def func(n_clicks):
 
 
 if __name__ == '__main__':
-    app.run_server(debug=False)
+    app.run_server(debug=True)
     

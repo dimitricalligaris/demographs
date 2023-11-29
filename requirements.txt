@@ -53,6 +53,7 @@ lazy_loader==0.3
 lxml==4.9.3
 Markdown==3.4.3
 MarkupSafe==2.1.2
+marshmallow==3.20.1
 matplotlib==3.7.2
 matplotlib-inline==0.1.6
 multidict==6.0.4
@@ -82,7 +83,7 @@ pytest==6.2.5
 python-dateutil==2.8.2
 pytz==2023.3
 PyWavelets==1.4.1
-#pywin32==306
+pywin32==306
 PyYAML==6.0.1
 pyzmq==25.0.2
 qiniu==7.10.0
