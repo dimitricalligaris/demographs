@@ -28,9 +28,9 @@ server = app.server
 
 app.layout = html.Div([
                 dcc.Store(id='alert-to-show'),
-                dcc.Store(id='client-data', data={'uploader':'Uploader()', 'analyzer':Analyzer().serialize()}),
-                dcc.Store(id='client-data-tmp-1', data={'uploader':'Uploader()', 'analyzer':Analyzer().serialize()}),
-                dcc.Store(id='client-data-tmp-2', data={'uploader':'Uploader()', 'analyzer':Analyzer().serialize()}),
+                dcc.Store(id='client-data', data={'uploader':Uploader().serialize(), 'analyzer':Analyzer().serialize()}),
+                dcc.Store(id='client-data-tmp-1', data={'uploader':Uploader().serialize(), 'analyzer':Analyzer().serialize()}),
+                dcc.Store(id='client-data-tmp-2', data={'uploader':Uploader().serialize(), 'analyzer':Analyzer().serialize()}),
                 dcc.Store(id="client-options", data={'first-visit':True}, storage_type='local'),
                 dcc.Download(id="download-data"),
                 html.Div(
@@ -49,7 +49,7 @@ app.layout = html.Div([
 
 
 
-uploader = Uploader()
+#uploader = Uploader()
 #analyzer = Analyzer()
 
 
@@ -79,6 +79,7 @@ def update_graphs(pathname, client_data):
     if pathname != '/analytics':
         raise PreventUpdate
     analyzer = Analyzer.deserialize(client_data['analyzer'])
+    uploader = Uploader.deserialize(client_data['uploader'])
     if analyzer is not None:
         analyzer.load_data(uploader.get_merged_data(), uploader.get_generic_metadata())
         analyzer.create_all_graphs()
@@ -104,6 +105,7 @@ def update_graphs(pathname, client_data):
 def update_output(list_of_contents, list_of_names, n_clicks_btn_rimuovi_file_caricati, n_clicks_remove_btn, filenames, client_data):
     
     analyzer = Analyzer.deserialize(client_data['analyzer'])
+    uploader = Uploader.deserialize(client_data['uploader'])
 
     alert_msg = []
     UPLOAD_DATA_CONTENTS = None                # x reset del contenuto di dcc.Upload
@@ -115,10 +117,11 @@ def update_output(list_of_contents, list_of_names, n_clicks_btn_rimuovi_file_car
         patched_list.clear()
         alert_msg = create_info_msg("Tutti i file sono stati rimossi.")
         alert_msg = json.dumps(alert_msg)
+        updata_client_data(client_data,uploader,analyzer)
         return patched_list, alert_msg, UPLOAD_DATA_CONTENTS, client_data
     elif is_triggered('upload-data') and list_of_contents is not None:
         output_data_upload = None
-        saved_files_filenames,not_saved_files_info = save_uploaded_data(list_of_contents, list_of_names)
+        saved_files_filenames,not_saved_files_info = save_uploaded_data(list_of_contents, list_of_names, uploader)
         if saved_files_filenames:         # verifica se almeno un file è stato caricato con successo
             alert_msg += (create_successful_upload_msg(saved_files_filenames))         
         if uploader.has_data():
@@ -127,6 +130,7 @@ def update_output(list_of_contents, list_of_names, n_clicks_btn_rimuovi_file_car
         if not_saved_files_info:
             alert_msg = alert_msg+(create_upload_error_msg(not_saved_files_info))
         alert_msg = json.dumps(alert_msg)
+        updata_client_data(client_data,uploader,analyzer)
         return output_data_upload, alert_msg, UPLOAD_DATA_CONTENTS, client_data       # aggiunge solo i dati nuovi
     elif is_triggered('btn-remove-file'):
         patched_list = Patch()
@@ -139,15 +143,24 @@ def update_output(list_of_contents, list_of_names, n_clicks_btn_rimuovi_file_car
                 alert_msg = json.dumps(msg)
         for v in values_to_remove:
             del patched_list[v]
+        updata_client_data(client_data,uploader,analyzer)
         return patched_list, alert_msg, UPLOAD_DATA_CONTENTS, client_data
     else:           # per aggiornamento/raggiungimento pagina
         if uploader.has_data():
+            updata_client_data(client_data,uploader,analyzer)
             return upload_ui.generate_output(uploader.get_all_data(),[]), alert_msg, UPLOAD_DATA_CONTENTS, client_data # rigenera tutti i dati
+    updata_client_data(client_data,uploader,analyzer)
     return None, alert_msg, UPLOAD_DATA_CONTENTS, client_data
 
 @staticmethod
 def is_triggered(id):
     return id in dash.callback_context.triggered[0]['prop_id'].split('.')[0]
+
+@staticmethod
+def updata_client_data(client_data,uploader,analyzer):
+    client_data['uploader'] = uploader.serialize()
+    client_data['analyzer'] = analyzer.serialize()
+
 
 
 
@@ -222,9 +235,10 @@ def create_successful_upload_msg(saved_filenames):
 @app.callback(
     Output('uploaded-files-general-btn-section','style'),
     [Input('output-data-upload', 'children'), Input('btn_rimuovi_file_caricati', 'n_clicks')],
-    [State('uploaded-files-general-btn-section', 'style')], Input({"type":"btn-remove-file","index":ALL},"n_clicks")
+    [State('uploaded-files-general-btn-section', 'style')], Input({"type":"btn-remove-file","index":ALL},"n_clicks"), Input('client-data','data')
 )
-def change_btn_section_visibility(trigger_1, trigger_2, btn_section_style, remove_file_clicks):
+def change_btn_section_visibility(trigger_1, trigger_2, btn_section_style, remove_file_clicks, client_data):
+    uploader = Uploader.deserialize(client_data['uploader'])
     if uploader.has_data():
         btn_section_style['display'] = 'block'
     else:
@@ -237,9 +251,10 @@ def change_btn_section_visibility(trigger_1, trigger_2, btn_section_style, remov
 
 @app.callback(
         Output('total-uploaded-files-text','children'),
-        Input('output-data-upload','children')
+        Input('output-data-upload','children'), Input('client-data','data')
 )
-def update_uploaded_files_number(input):
+def update_uploaded_files_number(input,client_data):
+    uploader = Uploader.deserialize(client_data['uploader'])
     text = 'Totale file caricati: '
     n_of_files = uploader.get_uploaded_files_number()
     return text+str(n_of_files)
@@ -247,7 +262,7 @@ def update_uploaded_files_number(input):
 
 
 @staticmethod
-def save_uploaded_data(list_of_contents, list_of_names):
+def save_uploaded_data(list_of_contents, list_of_names, uploader):
     "dati dei file, salva quelli idonei e ne restituisce la lista dei nomi"
     saved_files_filenames = []
     not_saved_files_info = []
@@ -271,7 +286,7 @@ def save_uploaded_data(list_of_contents, list_of_names):
                 raise GenericFileUploadError("Errore generico di caricamento file", filename)
         except GenericFileUploadError as e:
             not_saved_files_info.append(e)
-    return saved_files_filenames,not_saved_files_info
+    return saved_files_filenames, not_saved_files_info
 
 
 
@@ -339,5 +354,5 @@ def func(n_clicks):
 
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run_server(debug=False)
     

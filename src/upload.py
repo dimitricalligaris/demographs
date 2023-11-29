@@ -4,6 +4,7 @@ import io
 from dash import dash_table
 
 import pandas as pd
+import json
 from upload_errors import *
 
 class Uploader:
@@ -107,3 +108,31 @@ class Uploader:
     def get_filenames(self):
         return list(self.uploaded_files_data.keys())
 
+
+
+    def serialize(self):
+        # Convertire i DataFrame in stringhe JSON
+        serialized_data = {
+            filename: {
+                'filename': file_data['filename'],
+                'dataframe': file_data['dataframe'].to_json(orient='split') if 'dataframe' in file_data else None,
+                'platform': file_data['platform']
+            } for filename, file_data in self.uploaded_files_data.items()
+        }
+        return {
+            'uploaded_files_data': serialized_data,
+            'generic_metadata': self.generic_metadata
+        }
+
+    @staticmethod
+    def deserialize(serialized_uploader):
+        uploader = Uploader()
+        for filename, file_data in serialized_uploader['uploaded_files_data'].items():
+            df = pd.read_json(file_data['dataframe'], orient='split') if file_data['dataframe'] is not None else None
+            uploader.uploaded_files_data[filename] = {
+                'filename': filename,
+                'dataframe': df,
+                'platform': file_data['platform']
+            }
+        uploader.generic_metadata = serialized_uploader['generic_metadata']
+        return uploader
