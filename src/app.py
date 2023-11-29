@@ -59,26 +59,37 @@ uploader = Uploader()
 # Analisi dati: cambio url
 
 @app.callback(
-    [Output('graphs_container', 'children'), Output('client-data-tmp-1','data')],
+    Output('client-data-tmp-1', 'data'),
     [Input('url', 'pathname')], State('client-data','data')
 )
-def display_page(pathname, client_data):
+def update_client_data(pathname, client_data):
     analyzer = Analyzer.deserialize(client_data['analyzer'])
-    if pathname == '/analytics':
-        if analyzer is not None:
-            analyzer.load_data(uploader.get_merged_data(), uploader.get_generic_metadata())
-            analyzer.create_all_graphs()
-            graphs = analyzer.get_visualizations()
-            metadata = analyzer.get_formatted_metadata()
-            summary = analyzer.generate_data_summary()
-            client_data['analyzer'] = analyzer.serialize()
-            return Visualizer.create_complex_vis(graphs,metadata,summary),client_data
-    elif pathname == '/':
-        if analyzer is not None:
+    if analyzer is not None:
+        if pathname != '/analytics':
             analyzer.clear()
-            client_data['analyzer'] = analyzer.serialize()
-    return no_update, client_data
-        
+        client_data['analyzer'] = analyzer.serialize()
+        return client_data
+    return dash.no_update
+
+@app.callback(
+    Output('graphs_container', 'children'),
+    [Input('url', 'pathname')], State('client-data','data')
+)
+def update_graphs(pathname, client_data):
+    if pathname != '/analytics':
+        raise PreventUpdate
+    analyzer = Analyzer.deserialize(client_data['analyzer'])
+    if analyzer is not None:
+        analyzer.load_data(uploader.get_merged_data(), uploader.get_generic_metadata())
+        analyzer.create_all_graphs()
+        graphs = analyzer.get_visualizations()
+        metadata = analyzer.get_formatted_metadata()
+        summary = analyzer.generate_data_summary()
+        return Visualizer.create_complex_vis(graphs, metadata, summary)
+
+    raise PreventUpdate
+
+
 
 
 # Upload e rimozione dei file
