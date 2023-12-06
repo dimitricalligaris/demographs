@@ -342,11 +342,11 @@ def toggle_welcome_msg(n1, client_options):
 
 @app.callback(
     Output("download-data", "data"),
-    Input("text-download-test-data", "n_clicks"),
+    Input("welcome-text-download-test-data", "n_clicks"), Input("home-text-download-test-data", "n_clicks"), 
     prevent_initial_call=True,
 )
-def func(n_clicks):
-    if n_clicks > 0:
+def func(n_clicks_welcome, n_clicks_home):
+    if n_clicks_welcome > 0 or n_clicks_home > 0:
         return dcc.send_file(
             "data/test-data.csv"
         )
