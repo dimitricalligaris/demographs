@@ -348,7 +348,7 @@ def toggle_welcome_msg(n1, client_options):
 def func(n_clicks):
     if n_clicks > 0:
         return dcc.send_file(
-            "data/test_data.csv"
+            "data/test-data.csv"
         )
 
 
